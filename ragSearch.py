@@ -10,12 +10,13 @@ from model import Model
 class RagSearch:
 
 
-    def __init__(self, id, model):
+    def __init__(self, id, model, model_name="gemma3:12b"):
         self.chunks = []
         self.vectors = []
         self.source_names = []
         self.id = id
         self.model = model
+        self.model_name = model_name
         self.model.new_session(id)
 
 
@@ -77,7 +78,7 @@ class RagSearch:
         for ind in best_vectors:
             sources += f"[SOURCE {ind}]\n{self.chunks[ind].page_content}\n\n\n"
 
-        answer = self.model.invoke(self.id, text, sources)
+        answer = self.model.invoke(self.id, text, sources, self.model_name)
 
         for ind in best_vectors:
             if "page" in self.chunks[ind].metadata.keys():
@@ -96,5 +97,11 @@ class RagSearch:
     def get_files(self):
         return self.source_names
             
+    def set_model_name(self, model_name):
+        self.model_name = model_name
+
+    def get_model_name(self):
+        return self.model_name
+
 
 

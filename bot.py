@@ -7,7 +7,8 @@ from download import is_download_link, get_file_name
 import os
 import requests
 
-model = Model("bge-m3:567m", "gemma3:12b")
+model_names = ["gemma3:12b", "llama3.1"]
+model = Model("bge-m3:567m", model_names)
 ragDB = {}
 
 bot = telebot.TeleBot(TOKEN)
@@ -15,8 +16,20 @@ bot = telebot.TeleBot(TOKEN)
 prev_messages = {}
 
 keyboard = InlineKeyboardMarkup()  
-keyboard.add(InlineKeyboardButton("Присласть источник", callback_data="file"), InlineKeyboardButton("Задать вопрос", callback_data="question"))
+keyboard.add(InlineKeyboardButton("Присласть источник", callback_data="file"), InlineKeyboardButton("Поменять модель LLM", callback_data="change_llm"))
 keyboard.add(InlineKeyboardButton("Посмотреть источники", callback_data="db"), InlineKeyboardButton("Очистить источники", callback_data="clear"))
+keyboard.add(InlineKeyboardButton("Задать вопрос", callback_data="question"))
+
+model_name_keyboard = InlineKeyboardMarkup()
+num_lines = len(model_names)//2
+for i in range(num_lines):
+    model_name_keyboard.add(InlineKeyboardButton(model_names[i*2], callback_data=model_names[i*2]),
+                            InlineKeyboardButton(model_names[i*2+1], callback_data=model_names[i*2+1]))
+if (len(model_names)%2==1):
+    model_name_keyboard.add(InlineKeyboardButton(model_names[-1], callback_data=model_names[-1]))    
+
+
+
 
 start_text = """Привет 👋  
 Я — AI-ассистент, использующий RAG (Retrieval-Augmented Generation) поиск.
@@ -35,6 +48,20 @@ def start(message):
     prev_messages[message.chat.id] = m
 
 
+@bot.callback_query_handler(func=lambda x: x.data == "change_llm")
+def change_llm(call):
+    message = call.message
+    bot.edit_message_reply_markup(message.chat.id, prev_messages[message.chat.id].message_id, reply_markup=None)
+    m = bot.send_message(message.chat.id, f"Выберете модель. Текущая модель: {ragDB[message.chat.id].get_model_name()}", reply_markup=model_name_keyboard)
+    prev_messages[message.chat.id] = m
+
+@bot.callback_query_handler(func=lambda x: x.data in model_names)
+def set_llm(call):
+    message = call.message
+    bot.edit_message_reply_markup(message.chat.id, prev_messages[message.chat.id].message_id, reply_markup=None)
+    ragDB[message.chat.id].set_model_name(call.data)
+    m = bot.send_message(message.chat.id, f"Новая модель: {ragDB[message.chat.id].get_model_name()}", reply_markup=keyboard)
+    prev_messages[message.chat.id] = m
 
 @bot.callback_query_handler(func=lambda x: x.data == "question")
 def question(call):

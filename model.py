@@ -8,11 +8,11 @@ from faster_whisper import WhisperModel
 class Model:
 
     
-    def __init__(self, embedding_model_name, llm_model_name):
+    def __init__(self, embedding_model_name, llm_model_names):
         self.emb_model = OllamaEmbeddings(model=embedding_model_name)
-        self.llm_model = OllamaLLM(model=llm_model_name, temperature=0.3)
+        self.llm_models = {name : OllamaLLM(model=name, temperature=0.3) for name in llm_model_names}
         self.audio_model = WhisperModel("base", device="cuda")
-        self.sessions = {}
+        self.memories = {}
         self.prompt = PromptTemplate(
             input_variables=["chat_history", "k", "text", "sources"],
             template=(
@@ -33,18 +33,18 @@ class Model:
                                   "k": lambda x: memory.k,
                                   "text": lambda x: x["text"],
                                   "sources": lambda x: x["sources"],})
-        chain = RunnableSequence(memory_map | self.prompt | self.llm_model)
-        self.sessions[id] = chain
+        self.memories[id] = memory_map
 
 
     def embed(self, text):
         return self.emb_model.embed_query(text)
     
 
-    def invoke(self, id, text, sources):
-        if not id in self.sessions.keys():
+    def invoke(self, id, text, sources, model_name="gemma3:12b"):
+        if not id in self.memories.keys():
             self.new_session(id)
-        return self.sessions[id].invoke({"text": text, "sources": sources})
+        chain = RunnableSequence(self.memories[id] | self.prompt | self.llm_models[model_name])
+        return chain.invoke({"text": text, "sources": sources})
     
 
     def clear_memory(self, id):
