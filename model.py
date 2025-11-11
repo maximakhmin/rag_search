@@ -2,6 +2,7 @@ from langchain_ollama import OllamaEmbeddings, OllamaLLM
 from langchain_classic.memory.buffer_window import ConversationBufferWindowMemory
 from langchain_core.runnables import RunnableSequence, RunnableMap
 from langchain_core.prompts import PromptTemplate
+from faster_whisper import WhisperModel
 
 
 class Model:
@@ -10,6 +11,7 @@ class Model:
     def __init__(self, embedding_model_name, llm_model_name):
         self.emb_model = OllamaEmbeddings(model=embedding_model_name)
         self.llm_model = OllamaLLM(model=llm_model_name, temperature=0.3)
+        self.audio_model = WhisperModel("base", device="cuda")
         self.sessions = {}
         self.prompt = PromptTemplate(
             input_variables=["chat_history", "k", "text", "sources"],
@@ -40,10 +42,21 @@ class Model:
     
 
     def invoke(self, id, text, sources):
+        if not id in self.sessions.keys():
+            self.new_session(id)
         return self.sessions[id].invoke({"text": text, "sources": sources})
     
 
     def clear_memory(self, id):
         self.new_session(id)
+
+    def recognize(self, audiofilen_name):
+        segments, info = self.audio_model.transcribe(audiofilen_name, beam_size=5)
+
+        text = ""
+        for segment in segments:
+            text += segment.text + "\n"
+
+        return text
 
     

@@ -1,5 +1,8 @@
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+import moviepy as mp
+import os
 import numpy as np
 from model import Model
 
@@ -10,7 +13,7 @@ class RagSearch:
     def __init__(self, id, model):
         self.chunks = []
         self.vectors = []
-        self.file_names = []
+        self.source_names = []
         self.id = id
         self.model = model
         self.model.new_session(id)
@@ -23,11 +26,23 @@ class RagSearch:
     def load_file(self, file_name):
         if file_name.endswith(".pdf"):
             loader = PyPDFLoader(file_name)
+            documents = loader.load()
         elif file_name.endswith(".txt"):
             loader = TextLoader(file_name, encoding="UTF-8")
+            documents = loader.load()
+        elif file_name.endswith(".mp3"):
+            text = self.model.recognize(file_name)
+            documents = [Document(page_content=text, metadata={"source": file_name})]
+        elif file_name.endswith(".mp4"):
+            clip = mp.VideoFileClip(file_name)
+            clip.audio.write_audiofile(f"{self.id}.mp3")
+            del clip
+            text = self.model.recognize(f"{self.id}.mp3")
+            documents = [Document(page_content=text, metadata={"source": file_name})]
+            os.remove(f"{self.id}.mp3")
         else:
             return False
-        documents = loader.load()
+
         for document in documents:
             document.page_content = document.page_content.replace("-\n", "")
 
@@ -37,10 +52,10 @@ class RagSearch:
         self.chunks += new_chunks
         self.vectors += [self.model.embed(chunk.page_content) for chunk in new_chunks]
 
-        self.file_names.append(file_name)
+        self.source_names.append(file_name)
 
         return True
-
+        
 
     def find(self, text):
         target_vector = self.model.embed(text)
@@ -75,11 +90,11 @@ class RagSearch:
     def clear(self):
         self.chunks = []
         self.vectors = []
-        self.file_names = []
+        self.source_names = []
         self.model.clear_memory(self.id)
 
     def get_files(self):
-        return self.file_names
+        return self.source_names
             
 
 
